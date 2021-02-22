@@ -19,6 +19,7 @@ type
     myMemTableT: TIntegerField;
     myMemTableV: TIntegerField;
     myMemTableD: TStringField;
+    myMemTableMC: TStringField;
     procedure ServiceCreate(Sender: TObject);
     procedure ServiceExecute(Sender: TService);
     procedure TimerServisTimer(Sender: TObject);
@@ -147,9 +148,10 @@ end;
 
 procedure TMasLeakTestIntegrationService.Servis;
 var
-  qrySorgu,qryIslem: TADOQuery;
+  qrySorgu,qryIslem,qrySorguProd: TADOQuery;
   FileName:string;
   HttpReturn:String;
+  workCenterCode:String;
   productionMasterId:Integer;
   machineID,dataTypeID,actualValue,lastValue,recCount:Integer;
   realDateTime:TDateTime;
@@ -157,6 +159,9 @@ var
 begin
   qrySorgu := TADOQuery.Create(nil);
   qrySorgu.Connection := dm.conMAS;
+
+  qrySorguProd := TADOQuery.Create(nil);
+  qrySorguProd.Connection := dm.conMASProd;
 
   qryIslem := TADOQuery.Create(nil);
   qryIslem.Connection := dm.conMAS;
@@ -194,13 +199,14 @@ begin
           if recCount > 0 then lastValue := FieldByName('Value').AsInteger;
         End;
 
-        with qrySorgu do
+        with qrySorguProd do
         Begin
           Close;
           SQL.Clear;
-          SQL.Add(' SELECT TOP 1 Id FROM Production.ProductionMaster WITH(NOLOCK) Where EndDateTime IS NULL ');
-          SQL.Add(' AND WorkCenterId=:WorkCenterId');
-          Parameters.ParamByName('WorkCenterId').Value := machineID;
+          SQL.Add(' SELECT TOP 1 PM.Id FROM [Production].[ProductionMaster] AS PM WITH(NOLOCK)');
+          SQL.Add(' LEFT JOIN [Organization].[WorkCenter] AS WC WITH(NOLOCK) ON PM.WorkCenterId = WC.Id ');
+          SQL.Add(' WHERE PM.EndDateTime IS NULL AND WC.Code=:WorkCenterCode ');
+          Parameters.ParamByName('WorkCenterCode').Value := workCenterCode;
           Open;
 
           if RecordCount > 0 then productionMasterId := FieldByName('Id').AsInteger;

@@ -9,6 +9,7 @@ uses
 type
   Tdm = class(TDataModule)
     conMAS: TADOConnection;
+    conMASProd: TADOConnection;
     procedure DataModuleCreate(Sender: TObject);
   private
     { Private declarations }
@@ -35,6 +36,7 @@ var
   param2  : string;
 begin
   conMAS.Close;
+  conMASProd.Close;
   p := ExtractFilepath(Application.ExeName);
 
   if paramstr(2) = '' then
@@ -46,9 +48,12 @@ begin
   UDLAdi := param2;
 
   ForceDirectories(Path);
+
   conMAS.ConnectionString := 'FILE NAME=' + p + UDLAdi;
   conMAS.Open;
 
+  conMASProd.ConnectionString := 'FILE NAME=' + p + 'MAS-PROD.Udl';
+  conMASProd.Open;
 
 end;
 
