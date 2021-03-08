@@ -30,6 +30,7 @@ type
     procedure DosyaLogYaz(aMesaj: String);
     procedure HttpPost(aUrlPage, aParamString: String);
     function DateConvert(aDateString: string): TDateTime;
+    function DateConvertStr(aDateString: string): String;
   public
     plcIP:String;
     function GetServiceController: TServiceController; override;
@@ -146,12 +147,39 @@ begin
 
 end;
 
+function TMasLeakTestIntegrationService.DateConvertStr(aDateString: string): String;
+var
+  str,strMili,strLast:String;
+  myDateTime:TDateTime;
+  fmt     : TFormatSettings;
+begin
+  try
+    str:= AnsiMidStr(aDateString,10,48);
+    str:= StringReplace(str,'&#x2d;','/',[rfReplaceAll, rfIgnoreCase]);
+    str:= StringReplace(str,'&#x3a;',':',[rfReplaceAll, rfIgnoreCase]);
+    str:= StuffString(str,11,1,' ');
+    strMili := AnsiMidStr(str,20,4);
+
+    fmt.ShortDateFormat:='yyyy/mm/dd';
+    fmt.DateSeparator  :='/';
+    fmt.LongTimeFormat :='hh:nn:ss.zzz';
+    fmt.TimeSeparator  :=':';
+    myDateTime:= StrToDateTime(str,Fmt);
+    strLast:=DateTimeToStr(myDateTime)+strMili;
+
+    Result := strLast;
+  finally
+  end;
+
+end;
+
 procedure TMasLeakTestIntegrationService.Servis;
 var
   qrySorgu,qryIslem,qrySorguProd: TADOQuery;
   FileName:string;
   HttpReturn:String;
   workCenterCode:String;
+  realDateTimeStr:String;
   productionMasterId:Integer;
   machineID,dataTypeID,actualValue,lastValue,recCount:Integer;
   realDateTime:TDateTime;
@@ -183,6 +211,7 @@ begin
         dataTypeID:=myMemTable.Fields[1].AsInteger;
         actualValue:=myMemTable.Fields[2].AsInteger;
         realDateTime:=DateConvert(myMemTable.Fields[3].AsString);
+        realDateTimeStr:=DateConvertStr(myMemTable.Fields[3].AsString);
 
 
         with qrySorgu do
@@ -219,12 +248,13 @@ begin
             Close;
             SQL.Clear;
             SQL.Add('INSERT INTO [Orhan].[LeakTestProcessData] ');
-            SQL.Add('([WorkCenterId],[DataTypeId],[Value],[RealTimeStamp],[RecordTimeStamp],[ProductionMasterId]) VALUES ');
-            SQL.Add('(:WorkCenterId, :DataTypeId, :Value, :RealTimeStamp, :RecordTimeStamp, :ProductionMasterId) ');
+            SQL.Add('([WorkCenterId],[DataTypeId],[Value],[RealTimeStamp],[RealTimeStampStr],[RecordTimeStamp],[ProductionMasterId]) VALUES ');
+            SQL.Add('(:WorkCenterId, :DataTypeId, :Value, :RealTimeStamp, :RealTimeStampStr, :RecordTimeStamp, :ProductionMasterId) ');
             Parameters.ParamByName('WorkCenterId').Value          := machineID;
             Parameters.ParamByName('DataTypeId').Value            := dataTypeID;
             Parameters.ParamByName('Value').Value                 := actualValue;
             Parameters.ParamByName('RealTimeStamp').Value         := realDateTime;
+            Parameters.ParamByName('RealTimeStampStr').Value      := realDateTimeStr;
             Parameters.ParamByName('RecordTimeStamp').Value       := Now;
             if productionMasterId > 0 then
              Parameters.ParamByName('ProductionMasterId').Value   := productionMasterId
