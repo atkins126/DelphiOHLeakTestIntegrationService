@@ -212,6 +212,7 @@ begin
         actualValue:=myMemTable.Fields[2].AsInteger;
         realDateTime:=DateConvert(myMemTable.Fields[3].AsString);
         realDateTimeStr:=DateConvertStr(myMemTable.Fields[3].AsString);
+        workCenterCode := myMemTable.Fields[4].AsString;
 
 
         with qrySorgu do
