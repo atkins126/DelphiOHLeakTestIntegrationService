@@ -55,5 +55,9 @@ object MasLeakTestIntegrationService: TMasLeakTestIntegrationService
     object myMemTableMC: TStringField
       FieldName = 'MC'
     end
+    object myMemTableLB: TStringField
+      FieldName = 'LB'
+      Size = 255
+    end
   end
 end

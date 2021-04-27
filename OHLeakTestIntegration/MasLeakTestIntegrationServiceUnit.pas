@@ -20,6 +20,7 @@ type
     myMemTableV: TIntegerField;
     myMemTableD: TStringField;
     myMemTableMC: TStringField;
+    myMemTableLB: TStringField;
     procedure ServiceCreate(Sender: TObject);
     procedure ServiceExecute(Sender: TService);
     procedure TimerServisTimer(Sender: TObject);
@@ -180,8 +181,10 @@ var
   HttpReturn:String;
   workCenterCode:String;
   realDateTimeStr:String;
+  manuelLabel:String;
+  lastManuelLabel:String;
   productionMasterId:Integer;
-  machineID,dataTypeID,actualValue,lastValue,recCount:Integer;
+  machineID,dataTypeID,actualValue,lastValue,recCount,labelRecCount:Integer;
   realDateTime:TDateTime;
   ProcessTimeSn:Integer;
 begin
@@ -214,6 +217,13 @@ begin
         realDateTimeStr:=DateConvertStr(myMemTable.Fields[3].AsString);
         workCenterCode := myMemTable.Fields[4].AsString;
 
+        if (machineID = 33) or  (machineID = 28) or (machineID = 5) then
+        Begin
+          manuelLabel := myMemTable.Fields[5].AsString;
+          manuelLabel := StringReplace(manuelLabel, '&#x20;', ' ', [rfReplaceAll, rfIgnoreCase]);
+          manuelLabel := StringReplace(manuelLabel, '&#x27;', '', [rfReplaceAll, rfIgnoreCase]);
+        End;
+
 
         with qrySorgu do
         Begin
@@ -228,6 +238,56 @@ begin
           recCount := RecordCount;
           if recCount > 0 then lastValue := FieldByName('Value').AsInteger;
         End;
+
+
+
+        {$REGION 'Etiket Bilgileri Sorgulanýyor'}
+        if (machineID = 33) or  (machineID = 28) or (machineID = 5) then
+        Begin
+
+          with qrySorgu do
+          Begin
+            Close;
+            SQL.Clear;
+            SQL.Add(' SELECT TOP 1 LabelString FROM [Orhan].[LeakTestProcessData] WITH(NOLOCK) ');
+            SQL.Add(' Where WorkCenterId=:WorkCenterId And LabelString=:LabelString ORDER BY Id desc');
+            Parameters.ParamByName('WorkCenterId').Value  := machineID;
+            Parameters.ParamByName('LabelString').Value    := manuelLabel;
+            Open;
+
+            labelRecCount := RecordCount;
+            if labelRecCount > 0 then lastManuelLabel := FieldByName('LabelString').AsString;
+          End;
+
+          if (manuelLabel <> lastManuelLabel) or (labelRecCount = 0) then  //Yeni etiket kaydý gelmiþ ise
+          Begin
+
+            with qryIslem do
+            Begin
+              Close;
+              SQL.Clear;
+              SQL.Add('INSERT INTO [Orhan].[LeakTestProcessData] ');
+              SQL.Add('([WorkCenterId],[DataTypeId],[Value],[RealTimeStamp],[RealTimeStampStr],[RecordTimeStamp],[ProductionMasterId],[LabelString]) VALUES ');
+              SQL.Add('(:WorkCenterId, :DataTypeId, :Value, :RealTimeStamp, :RealTimeStampStr, :RecordTimeStamp, :ProductionMasterId, :LabelString) ');
+              Parameters.ParamByName('WorkCenterId').Value          := machineID;
+              Parameters.ParamByName('DataTypeId').Value            := dataTypeID;
+              Parameters.ParamByName('Value').Value                 := actualValue;
+              Parameters.ParamByName('RealTimeStamp').Value         := realDateTime;
+              Parameters.ParamByName('RealTimeStampStr').Value      := realDateTimeStr;
+              Parameters.ParamByName('RecordTimeStamp').Value       := Now;
+              if productionMasterId > 0 then
+               Parameters.ParamByName('ProductionMasterId').Value   := productionMasterId
+              else
+                Parameters.ParamByName('ProductionMasterId').Value  := null;
+              Parameters.ParamByName('LabelString').Value       := manuelLabel;
+              ExecSQL;
+            End;
+
+          End;
+
+        End;
+
+        {$ENDREGION}
 
         with qrySorguProd do
         Begin
