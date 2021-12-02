@@ -32,8 +32,10 @@ type
     procedure HttpPost(aUrlPage, aParamString: String);
     function DateConvert(aDateString: string): TDateTime;
     function DateConvertStr(aDateString: string): String;
+    function ExistsActualDownTime(aWorkCenterId: Integer): Boolean;
   public
     plcIP:String;
+    autoNOKDownTimeId:Integer;
     function GetServiceController: TServiceController; override;
     procedure JsonToDataset(aDataset :TDataset; aJson : string);
     { Public declarations }
@@ -61,8 +63,8 @@ end;
 procedure TMasLeakTestIntegrationService.ServiceCreate(Sender: TObject);
 var
   qry:TADOQuery;
-  IniDosya: TIniFile;
-  SorguYenilemeSn:Integer;
+  iniDosya: TIniFile;
+  sorguYenilemeSn:Integer;
 
 begin
 
@@ -72,7 +74,9 @@ begin
 
       plcIP := IniDosya.ReadString('AYAR', 'PlcIp', '192.168.11.111');
 
-      SorguYenilemeSn := IniDosya.ReadInteger('AYAR','SorguYenilemeSn',15);
+      sorguYenilemeSn := IniDosya.ReadInteger('AYAR','SorguYenilemeSn',15);
+
+      autoNOKDownTimeId := IniDosya.ReadInteger('AYAR','AutoNOKDownTimeId',2);
 
       iniDosya.Free;
 
@@ -186,7 +190,8 @@ var
   productionMasterId:Integer;
   machineID,dataTypeID,actualValue,lastValue,recCount,labelRecCount:Integer;
   realDateTime:TDateTime;
-  ProcessTimeSn:Integer;
+  processTimeSn:Integer;
+  firstSerialPartActualValue:Integer;
 begin
   qrySorgu := TADOQuery.Create(nil);
   qrySorgu.Connection := dm.conMAS;
@@ -209,6 +214,8 @@ begin
         dataTypeID:= 0;
         actualValue:= -1;
         productionMasterId:= 0;
+        firstSerialPartActualValue:= 0;
+
 
         machineID:=myMemTable.Fields[0].AsInteger;
         dataTypeID:=myMemTable.Fields[1].AsInteger;
@@ -223,6 +230,7 @@ begin
           manuelLabel := StringReplace(manuelLabel, '&#x20;', ' ', [rfReplaceAll, rfIgnoreCase]);
           manuelLabel := StringReplace(manuelLabel, '&#x27;', '', [rfReplaceAll, rfIgnoreCase]);
         End;
+
 
 
         with qrySorgu do
@@ -304,6 +312,7 @@ begin
 
         if (actualValue <> lastValue) or (recCount = 0) then
         Begin
+
           with qryIslem do
           Begin
             Close;
@@ -321,7 +330,31 @@ begin
              Parameters.ParamByName('ProductionMasterId').Value   := productionMasterId
             else
               Parameters.ParamByName('ProductionMasterId').Value  := null;
-            ExecSQL;
+            ExecSQL
+          End;
+
+          if (dataTypeId = 3) and (actualValue = 2) and (productionMasterId > 0) and (not ExistsActualDownTime(machineID))then
+            //Seri Parça NOK Sinyali Geldi Ýse ve Açýk Üretim Kaydý Var ise
+          Begin
+            with qryIslem do
+            Begin
+              Close;
+              SQL.Clear;
+              SQL.Add('INSERT INTO [Production].[ProductionDownTime] ');
+              SQL.Add('([WorkCenterId],[ProductionMasterId],[DowntimeId],[StartDateTime],[StartComment],[IsAutomatic],[Active],[CreatedOn],[CreatedBy]) VALUES ');
+              SQL.Add('(:WorkCenterId, :ProductionMasterId, :DowntimeId, :StartDateTime, :StartComment, :IsAutomatic, :Active, :CreatedOn, :CreatedBy )');
+              Parameters.ParamByName('WorkCenterId').Value        := machineID;
+              Parameters.ParamByName('ProductionMasterId').Value  := productionMasterId;
+              Parameters.ParamByName('DowntimeId').Value          := autoNOKDownTimeId;
+              Parameters.ParamByName('StartDateTime').Value       := Now;
+              Parameters.ParamByName('StartComment').Value        := 'Started By LeakTestProcessDataService';
+              Parameters.ParamByName('IsAutomatic').Value         := 1;
+              Parameters.ParamByName('Active').Value              := 1;
+              Parameters.ParamByName('CreatedOn').Value           := Now;
+              Parameters.ParamByName('CreatedBy').Value           := 'LeakTestProcessDataService';
+              ExecSQL
+            End;
+
           End;
 
         End;
@@ -413,4 +446,37 @@ begin
   finally
   end;
 end;
+
+function TMasLeakTestIntegrationService.ExistsActualDownTime(aWorkCenterId: Integer): Boolean;
+var
+  qrySorguProd : TADOQuery;
+  actualDownTimeRecordCount : Integer;
+begin
+
+  try
+    qrySorguProd := TADOQuery.Create(nil);
+    qrySorguProd.Connection := dm.conMASProd;
+
+    with qrySorguProd do
+    Begin
+      Close;
+      SQL.Clear;
+      SQL.Add(' SELECT TOP 1 Id FROM [Production].[ProductionDownTime] WITH(NOLOCK)');
+      SQL.Add(' WHERE WorkCenterId =:WorkCenterId AND Active = 1 AND EndDateTime IS NULL ');
+      Parameters.ParamByName('WorkCenterId').Value := aWorkCenterId;
+      Open;
+
+      actualDownTimeRecordCount := RecordCount;
+    End;
+
+  finally
+    qrySorguProd.Close;
+    FreeAndNil(qrySorguProd);
+  end;
+
+  Result := actualDownTimeRecordCount > 0;
+
+end;
+
 end.
+
