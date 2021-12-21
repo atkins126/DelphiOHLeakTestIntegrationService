@@ -333,29 +333,29 @@ begin
             ExecSQL
           End;
 
+          {$REGION 'Serial Part NOK Durumunda Otomatik Duruþ ve Çaðrý Kaydý Oluþturuluyorr'}
+
           if (dataTypeId = 3) and (actualValue = 2) and (productionMasterId > 0) and (not ExistsActualDownTime(machineID))then
             //Seri Parça NOK Sinyali Geldi Ýse ve Açýk Üretim Kaydý Var ise
           Begin
+
+
             with qryIslem do
             Begin
               Close;
               SQL.Clear;
-              SQL.Add('INSERT INTO [Production].[ProductionDownTime] ');
-              SQL.Add('([WorkCenterId],[ProductionMasterId],[DowntimeId],[StartDateTime],[StartComment],[IsAutomatic],[Active],[CreatedOn],[CreatedBy]) VALUES ');
-              SQL.Add('(:WorkCenterId, :ProductionMasterId, :DowntimeId, :StartDateTime, :StartComment, :IsAutomatic, :Active, :CreatedOn, :CreatedBy )');
+              SQL.Add('EXECUTE [Orhan].[StartSerialPartDownTimeAndInvitation] :WorkCenterId, :ProductionMasterId, :DowntimeId, :StartDateTime ');
               Parameters.ParamByName('WorkCenterId').Value        := machineID;
               Parameters.ParamByName('ProductionMasterId').Value  := productionMasterId;
               Parameters.ParamByName('DowntimeId').Value          := autoNOKDownTimeId;
               Parameters.ParamByName('StartDateTime').Value       := Now;
-              Parameters.ParamByName('StartComment').Value        := 'Started By LeakTestProcessDataService';
-              Parameters.ParamByName('IsAutomatic').Value         := 1;
-              Parameters.ParamByName('Active').Value              := 1;
-              Parameters.ParamByName('CreatedOn').Value           := Now;
-              Parameters.ParamByName('CreatedBy').Value           := 'LeakTestProcessDataService';
               ExecSQL
             End;
 
+
           End;
+
+          {$ENDREGION}
 
         End;
 
@@ -366,7 +366,7 @@ begin
 
     except on e:Exception do
       begin
-        DosyaLogYaz(DateTimeToStr(now)+'PLC Web Servisten Ýþleminde Hata Oluþtu');
+        DosyaLogYaz(DateTimeToStr(now)+'PLC Web Serviste Ýþleminde Hata Oluþtu');
         Durum:= False;
 
       end;
